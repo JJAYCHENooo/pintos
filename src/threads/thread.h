@@ -101,6 +101,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    /* My Implementation */
+    int ret;                            /*在init_thread()函数中初始化为0（这里可以不用初始化）*/
+    /* My Implementation */
 #endif
 
     /* Owned by thread.c. */

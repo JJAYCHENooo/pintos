@@ -38,8 +38,15 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+
+  /* My Implementation */
+  char *real_name, *save_ptr;
+  real_name = strtok_r (file_name, " ", &save_ptr);//分离出真实的参数
+  /* My Implementation */
+
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -53,18 +60,49 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  
+  /* My Implementation */
+  char *token=NULL, *save_ptr=NULL;
+  token = strtok_r (file_name, " ", &save_ptr);  // get real file name, use it in load()
+  /* My Implementation */
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (token, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  /* My Implementation */
+  char *esp=(char *)if_.esp;
+  char *arg[256];               //assume numbers of argument below 256
+  int i,n=0;
+  for (; token != NULL;token = strtok_r (NULL, " ", &save_ptr))   //copy the argument to user stack
+    {
+        esp-=strlen(token)+1;                       //because user stack increase to low addr.
+        strlcpy(esp,token,strlen(token)+2);          //copy param to user stack
+        arg[n++]=esp;
+    }
+  while((int)esp%4)            //word align
+    esp--;
+
+  int *p=esp-4;
+  *p--=0;                      //first 0
+  for(i=n-1;i>=0;i--)           //place the arguments' pointers to stack
+    *p--=(int *)arg[i];
+  *p--=p+1;
+  *p--=n;
+  *p--=0;
+  esp=p+1;
+  if_.esp=esp;                   //set new stack top
+  palloc_free_page (file_name);
+  /* My Implementation */
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -110,6 +148,10 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+
+      /* My Implementation */
+      printf ("%s= exit(%d)\n",cur->name,cur->ret);//输出退出消息
+      /* My Implementation */
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);

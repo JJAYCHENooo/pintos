@@ -146,7 +146,7 @@ process_wait (tid_t child_tid UNUSED)
       goto done;
     }
 
-  sema_down (&t->wait);-0  
+  sema_down (&t->wait);
   ret = t->ret_status;
   printf ("%s: exit(%d)\n", t->name, t->ret_status);
   while (t->status == THREAD_BLOCKED)
@@ -179,7 +179,7 @@ process_exit (void)
          that's been freed (and cleared). */
 
       /* My Implementation */
-      printf ("%s= exit(%d)\n",cur->name,cur->ret);//输出退出消息
+      printf ("%s= exit(%d)\n",cur->name,cur->ret_status);//输出退出消息
       /* == My Implementation */
       cur->pagedir = NULL;
       pagedir_activate (NULL);

@@ -129,7 +129,7 @@ process_wait (tid_t child_tid UNUSED)
   // return -1;
 
   /* My Implementation */
-  
+
   // while(true){
   //   thread_yield();
   // }
@@ -508,7 +508,10 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        //*esp = PHYS_BASE;
+        /* My Implementation */
+        *esp = PHYS_BASE-12;
+        /* == My Implementation */
       else
         palloc_free_page (kpage);
     }

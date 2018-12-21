@@ -25,11 +25,47 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+// tid_t
+// process_execute (const char *file_name) 
+// {
+//   char *fn_copy;
+//   tid_t tid;
+
+//   /* Make a copy of FILE_NAME.
+//      Otherwise there's a race between the caller and load(). */
+//   fn_copy = palloc_get_page (0);
+//   if (fn_copy == NULL)
+//     return TID_ERROR;
+//   strlcpy (fn_copy, file_name, PGSIZE);
+
+
+//    My Implementation 
+//   char *real_name, *save_ptr;
+//   real_name = strtok_r (file_name, " ", &save_ptr);//分离出真实的参数
+//   /* == My Implementation */
+
+
+//   /* Create a new thread to execute FILE_NAME. */
+//   tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+//   if (tid == TID_ERROR)
+//     palloc_free_page (fn_copy); 
+//   return tid;
+// }
+
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
+
+  /* My Implementation */
+  char *save;
+  char *fn;
+  
+  struct thread *t;
+  
+  tid = TID_ERROR;
+  /* == My Implementation */
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -37,16 +73,36 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
-
+  
   /* My Implementation */
-  char *real_name, *save_ptr;
-  real_name = strtok_r (file_name, " ", &save_ptr);//分离出真实的参数
+  fn = malloc (strlen (file_name) + 1);
+  if (!fn)
+    goto done;
+  memcpy (fn, file_name, strlen (file_name) + 1);
+  file_name = strtok_r (fn, " ", &save);
   /* == My Implementation */
-
-
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+  /* Old Implementation 
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy); */
+  
+  /* My Implementation */
+  tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR)
+    goto done;
+  /* Wait for child thread to load */
+  t = get_thread_by_tid (tid);
+  sema_down (&t->wait);
+  if (t->ret_status == -1)
+    tid = TID_ERROR;
+  while (t->status == THREAD_BLOCKED)
+    thread_unblock (t);
+  if (t->ret_status == -1)
+    process_wait (t->tid);
+  
+done:
+  free (fn);
+  /* == My Implementation */
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,16 +110,80 @@ process_execute (const char *file_name)
 
 /* A thread function that loads a user process and starts it
    running. */
+// static void
+// start_process (void *file_name_)
+// {
+//   char *file_name = file_name_;
+//   struct intr_frame if_;
+//   bool success;
+  
+//   /* My Implementation */
+//   char *token=NULL, *save_ptr=NULL;
+//   token = strtok_r (file_name, " ", &save_ptr);  // get real file name, use it in load()
+//   /* == My Implementation */
+
+//   /* Initialize interrupt frame and load executable. */
+//   memset (&if_, 0, sizeof if_);
+//   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+//   if_.cs = SEL_UCSEG;
+//   if_.eflags = FLAG_IF | FLAG_MBS;
+//   success = load (token, &if_.eip, &if_.esp);
+
+//   /* If load failed, quit. */
+//   palloc_free_page (file_name);
+//   if (!success) 
+//     thread_exit ();
+
+//   /* My Implementation */
+//   char *esp=(char *)if_.esp;
+//   char *arg[256];               //assume numbers of argument below 256
+//   int i,n=0;
+//   for (; token != NULL;token = strtok_r (NULL, " ", &save_ptr))   //copy the argument to user stack
+//     {
+//         esp-=strlen(token)+1;                       //because user stack increase to low addr.
+//         strlcpy(esp,token,strlen(token)+2);          //copy param to user stack
+//         arg[n++]=esp;
+//     }
+//   while((int)esp%4)            //word align
+//     esp--;
+
+//   int *p=esp-4;
+//   *p--=0;                      //first 0
+//   for(i=n-1;i>=0;i--)           //place the arguments' pointers to stack
+//     *p--=(int *)arg[i];
+//   *p--=p+1;
+//   *p--=n;
+//   *p--=0;
+//   esp=p+1;
+//   if_.esp=esp;                   //set new stack top
+//   palloc_free_page (file_name);
+//   /* == My Implementation */
+
+
+//   /* Start the user process by simulating a return from an
+//      interrupt, implemented by intr_exit (in
+//      threads/intr-stubs.S).  Because intr_exit takes all of its
+//      arguments on the stack in the form of a `struct intr_frame',
+//      we just point the stack pointer (%esp) to our stack frame
+//      and jump to it. */
+//   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+//   NOT_REACHED ();
+// }
+
 static void
 start_process (void *file_name_)
 {
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-  
+
   /* My Implementation */
-  char *token=NULL, *save_ptr=NULL;
-  token = strtok_r (file_name, " ", &save_ptr);  // get real file name, use it in load()
+  char *token, *save_ptr;
+  void *start;
+  int argc, i;
+  int *argv_off; /* Maximum of 2 arguments */
+  size_t file_name_len;
+  struct thread *t;
   /* == My Implementation */
 
   /* Initialize interrupt frame and load executable. */
@@ -71,38 +191,80 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (token, &if_.eip, &if_.esp);
+  
+  /* My Implementation */
+  t = thread_current ();
+  argc = 0;
+  argv_off = malloc (32 * sizeof (int));
+  if (!argv_off)
+    goto exit;
+  file_name_len = strlen (file_name);
+  argv_off[0] = 0;
+  for (
+       token = strtok_r (file_name, " ", &save_ptr);
+       token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)
+       )
+        {
+          while (*(save_ptr) == ' ')
+            ++save_ptr;
+          argv_off[++argc] = save_ptr - file_name;
+        }
+  /* == My Implementation */
+  
+  success = load (file_name, &if_.eip, &if_.esp);
+  
+  /* My Implementation */
+  /* Setting up stack */
+  if (success)
+    {
+      t->self = filesys_open (file_name);
+      file_deny_write (t->self);
+      if_.esp -= file_name_len + 1;
+      start = if_.esp;
+      memcpy (if_.esp, file_name, file_name_len + 1);
+      if_.esp -= 4 - (file_name_len + 1) % 4; /* alignment */
+      if_.esp -= 4;
+      *(int *)(if_.esp) = 0; /* argv[argc] == 0 */
+      /* Now pushing argv[x], and this is where the fun begins */
+      for (i = argc - 1; i >= 0; --i)
+        {
+          if_.esp -= 4;
+          *(void **)(if_.esp) = start + argv_off[i]; /* argv[x] */
+        }
 
+      if_.esp -= 4;
+      *(char **)(if_.esp) = (if_.esp + 4); /* argv */
+      if_.esp -= 4;
+      *(int *)(if_.esp) = argc;
+      if_.esp -= 4;
+      *(int *)(if_.esp) = 0; /* Fake return address */
+      
+      sema_up (&t->wait);
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
+    }
+  else
+    {
+      free (argv_off);
+exit:
+      t->ret_status = -1;
+      sema_up (&t->wait);
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
+      thread_exit ();
+    }
+  
+  free (argv_off);
+  /* == My Implementation */
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
-
-  /* My Implementation */
-  char *esp=(char *)if_.esp;
-  char *arg[256];               //assume numbers of argument below 256
-  int i,n=0;
-  for (; token != NULL;token = strtok_r (NULL, " ", &save_ptr))   //copy the argument to user stack
-    {
-        esp-=strlen(token)+1;                       //because user stack increase to low addr.
-        strlcpy(esp,token,strlen(token)+2);          //copy param to user stack
-        arg[n++]=esp;
-    }
-  while((int)esp%4)            //word align
-    esp--;
-
-  int *p=esp-4;
-  *p--=0;                      //first 0
-  for(i=n-1;i>=0;i--)           //place the arguments' pointers to stack
-    *p--=(int *)arg[i];
-  *p--=p+1;
-  *p--=n;
-  *p--=0;
-  esp=p+1;
-  if_.esp=esp;                   //set new stack top
-  palloc_free_page (file_name);
-  /* == My Implementation */
-
+  /* Old Implementation 
+  if (!success)   
+    thread_exit (); */
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -114,6 +276,7 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -124,7 +287,7 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
   // return -1;
 
@@ -158,12 +321,31 @@ done:
   /* == My Implementation */
 }
 
+
+
+
+
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+
+  /* My Implementation */
+  // while (!list_empty (&cur->wait.waiters))
+  //   sema_up (&cur->wait);
+  // file_close (cur->self);
+  // cur->self = NULL;
+  // cur->exited = true;
+  // if (cur->parent)
+  //   {
+  //     intr_disable ();
+  //     thread_block ();
+  //     intr_enable ();
+  //   }
+  /* == My Implementation */
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -179,7 +361,7 @@ process_exit (void)
          that's been freed (and cleared). */
 
       /* My Implementation */
-      printf ("%s= exit(%d)\n",cur->name,cur->ret_status);//输出退出消息
+      // printf ("%s= exit(%d)\n",cur->name,cur->ret_status);//输出退出消息
       /* == My Implementation */
       cur->pagedir = NULL;
       pagedir_activate (NULL);

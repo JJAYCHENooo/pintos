@@ -42,7 +42,7 @@ process_execute (const char *file_name)
   /* My Implementation */
   char *real_name, *save_ptr;
   real_name = strtok_r (file_name, " ", &save_ptr);//分离出真实的参数
-  /* My Implementation */
+  /* == My Implementation */
 
 
   /* Create a new thread to execute FILE_NAME. */
@@ -64,7 +64,7 @@ start_process (void *file_name_)
   /* My Implementation */
   char *token=NULL, *save_ptr=NULL;
   token = strtok_r (file_name, " ", &save_ptr);  // get real file name, use it in load()
-  /* My Implementation */
+  /* == My Implementation */
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -101,7 +101,7 @@ start_process (void *file_name_)
   esp=p+1;
   if_.esp=esp;                   //set new stack top
   palloc_free_page (file_name);
-  /* My Implementation */
+  /* == My Implementation */
 
 
   /* Start the user process by simulating a return from an
@@ -127,12 +127,35 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   // return -1;
+
+  /* My Implementation */
   
-  /* My Implementation */
-  while(true){
-    thread_yield();
-  }
-  /* My Implementation */
+  // while(true){
+  //   thread_yield();
+  // }
+  struct thread *t;
+  int ret;
+  
+  ret = -1;
+  t = get_thread_by_tid (child_tid);
+  if (!t || t->status == THREAD_DYING || t->ret_status == RET_STATUS_INVALID)
+    goto done;
+  if (t->ret_status != RET_STATUS_DEFAULT && t->ret_status != RET_STATUS_INVALID)
+    {
+      ret = t->ret_status;
+      goto done;
+    }
+
+  sema_down (&t->wait);-0  
+  ret = t->ret_status;
+  printf ("%s: exit(%d)\n", t->name, t->ret_status);
+  while (t->status == THREAD_BLOCKED)
+    thread_unblock (t);
+  
+done:
+  t->ret_status = RET_STATUS_INVALID;
+  return ret;
+  /* == My Implementation */
 }
 
 /* Free the current process's resources. */
@@ -157,7 +180,7 @@ process_exit (void)
 
       /* My Implementation */
       printf ("%s= exit(%d)\n",cur->name,cur->ret);//输出退出消息
-      /* My Implementation */
+      /* == My Implementation */
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);

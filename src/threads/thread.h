@@ -24,6 +24,13 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* My Implementation */
+#ifdef USERPROG
+# define RET_STATUS_DEFAULT 0xcdcdcdcd
+# define RET_STATUS_INVALID 0xdcdcdcdc
+#endif
+/* == My Implementation */
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -101,9 +108,18 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
     /* My Implementation */
-    int ret;                            /*在init_thread()函数中初始化为0（这里可以不用初始化）*/
-    /* My Implementation */
+    struct semaphore wait;              /* semaphore for process_wait */
+    int ret_status;                     /* return status */
+    struct list files;                  /* all opened files */
+    struct file *self;                  /* the image file on the disk */
+    struct thread *parent;              /* parent process */
+    struct list children;               /* all children process */
+    struct list_elem children_elem;     /* in children list */
+    bool exited;                        /* whether the thread is exited or not */
+    /* == My Implementation */
+
 #endif
 
     /* Owned by thread.c. */
@@ -159,6 +175,9 @@ void thread_mlfqs_update_priority (struct thread *);
 void thread_mlfqs_update_load_avg_and_recent_cpu (void);
 void thread_update_priority (struct thread *);
 void thread_mlfqs_increase_recent_cpu_by_one (void);
+/* My Implementation */
+struct thread *get_thread_by_tid (tid_t);
+/* == My Implementation */
 #endif /* threads/thread.h */
 /* Let thread hold a lock */
 

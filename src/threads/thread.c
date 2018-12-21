@@ -215,7 +215,20 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  thread_yield ();
+  thread_yield (); //Project2中是否需要注释掉？
+
+  /* My Implementation */
+  #ifdef USERPROG
+  sema_init (&t->wait, 0);
+  t->ret_status = RET_STATUS_DEFAULT;
+  list_init (&t->files);
+  list_init (&t->children);
+  if (thread_current () != initial_thread)
+    list_push_back (&thread_current ()->children, &t->children_elem);
+  t->parent = thread_current ();
+  t->exited = false;
+  #endif
+  /* == My Implementation */
 
   return tid;
 }
@@ -750,5 +763,26 @@ thread_mlfqs_update_load_avg_and_recent_cpu (void)
       thread_mlfqs_update_priority (t);
     }
   }
+
 }
 
+/* My Implementation */
+struct thread *
+get_thread_by_tid (tid_t tid)
+{
+  struct list_elem *f;
+  struct thread *ret;
+  
+  ret = NULL;
+  for (f = list_begin (&all_list); f != list_end (&all_list); f = list_next (f))
+    {
+      ret = list_entry (f, struct thread, allelem);
+      ASSERT (is_thread (ret));
+      if (ret->tid == tid)
+        return ret;
+    }
+    
+  return NULL;
+}
+
+/* == My Implementation */

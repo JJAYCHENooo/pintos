@@ -41,7 +41,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 //    My Implementation 
 //   char *real_name, *save_ptr;
-//   real_name = strtok_r (file_name, " ", &save_ptr);//·ÖÀë³öÕæÊµµÄ²ÎÊý
+//   real_name = strtok_r (file_name, " ", &save_ptr);//????å®ž?ç‰Ÿ??
 //   /* == My Implementation */
 
 
@@ -311,7 +311,8 @@ process_wait (tid_t child_tid)
 
   sema_down (&t->wait);
   ret = t->ret_status;
-  printf ("%s: exit(%d)\n", t->name, t->ret_status);
+  if (t->ret_status!=RET_STATUS_DEFAULT)
+    printf ("%s: exit(%d)\n", t->name, t->ret_status);
   while (t->status == THREAD_BLOCKED)
     thread_unblock (t);
   
@@ -334,17 +335,17 @@ process_exit (void)
 
 
   /* My Implementation */
-  // while (!list_empty (&cur->wait.waiters))
-  //   sema_up (&cur->wait);
-  // file_close (cur->self);
-  // cur->self = NULL;
-  // cur->exited = true;
-  // if (cur->parent)
-  //   {
-  //     intr_disable ();
-  //     thread_block ();
-  //     intr_enable ();
-  //   }
+  while (!list_empty (&cur->wait.waiters))
+    sema_up (&cur->wait);
+  file_close (cur->self);
+  cur->self = NULL;
+  cur->exited = true;
+  if (cur->parent)
+    {
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
+    }
   /* == My Implementation */
 
   /* Destroy the current process's page directory and switch back
@@ -361,7 +362,7 @@ process_exit (void)
          that's been freed (and cleared). */
 
       /* My Implementation */
-      // printf ("%s= exit(%d)\n",cur->name,cur->ret_status);//Êä³öÍË³öÏûÏ¢
+      // printf ("%s= exit(%d)\n",cur->name,cur->ret_status);//???????æ¯
       /* == My Implementation */
       cur->pagedir = NULL;
       pagedir_activate (NULL);
